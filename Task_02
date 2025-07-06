@@ -1,0 +1,98 @@
+from PIL import Image
+import numpy as np
+import argparse
+
+def load_image(image_path):
+    """Load an image from file and return as numpy array"""
+    img = Image.open(image_path)
+    return np.array(img)
+
+def save_image(image_array, output_path):
+    """Save a numpy array as an image file"""
+    img = Image.fromarray(image_array)
+    img.save(output_path)
+
+def swap_pixels(image_array):
+    """Encrypt by swapping pixel values (RGB -> BRG)"""
+    # Create a copy to avoid modifying original
+    encrypted = image_array.copy()
+    
+    # Swap color channels: R -> B -> G -> R
+    encrypted[..., 0], encrypted[..., 1], encrypted[..., 2] = \
+        encrypted[..., 2], encrypted[..., 0], encrypted[..., 1]
+    
+    return encrypted
+
+def xor_encrypt(image_array, key=123):
+    """Encrypt by applying XOR operation to each pixel component with a key"""
+    encrypted = image_array.copy()
+    np.bitwise_xor(encrypted, key, out=encrypted)
+    return encrypted
+
+def add_encrypt(image_array, value=50):
+    """Encrypt by adding a value to each pixel component (with overflow handling)"""
+    encrypted = image_array.copy()
+    encrypted = (encrypted + value) % 256  # Ensure values stay in 0-255 range
+    return encrypted
+
+def reverse_rows(image_array):
+    """Encrypt by reversing the order of rows in the image"""
+    return image_array[::-1, :, :]
+
+def decrypt_image(image_array, method, key=None):
+    """Decrypt an image based on the encryption method used"""
+    if method == 'swap':
+        # Swap twice more to return to original (RGB -> BRG -> GBR -> RGB)
+        decrypted = swap_pixels(swap_pixels(image_array))
+    elif method == 'xor':
+        decrypted = xor_encrypt(image_array, key)
+    elif method == 'add':
+        decrypted = add_encrypt(image_array, -key if key else -50)
+    elif method == 'reverse':
+        decrypted = reverse_rows(image_array)
+    else:
+        raise ValueError("Unknown decryption method")
+    return decrypted
+
+def main():
+    parser = argparse.ArgumentParser(description="Simple Image Encryption Tool")
+    parser.add_argument('input', help="Input image file path")
+    parser.add_argument('output', help="Output image file path")
+    parser.add_argument('--method', choices=['swap', 'xor', 'add', 'reverse'], 
+                        default='swap', help="Encryption method to use")
+    parser.add_argument('--key', type=int, help="Encryption key (for XOR/Add methods)")
+    parser.add_argument('--decrypt', action='store_true', help="Decrypt instead of encrypt")
+    
+    args = parser.parse_args()
+    
+    # Load the image
+    try:
+        image = load_image(args.input)
+    except Exception as e:
+        print(f"Error loading image: {e}")
+        return
+    
+    # Process the image
+    if args.decrypt:
+        processed = decrypt_image(image, args.method, args.key)
+        action = "Decrypted"
+    else:
+        if args.method == 'swap':
+            processed = swap_pixels(image)
+        elif args.method == 'xor':
+            processed = xor_encrypt(image, args.key if args.key else 123)
+        elif args.method == 'add':
+            processed = add_encrypt(image, args.key if args.key else 50)
+        elif args.method == 'reverse':
+            processed = reverse_rows(image)
+        action = "Encrypted"
+    
+    # Save the result
+    try:
+        save_image(processed, args.output)
+        print(f"{action} image saved to {args.output}")
+    except Exception as e:
+        print(f"Error saving image: {e}")
+
+if __name__ == "__main__":
+    main()
